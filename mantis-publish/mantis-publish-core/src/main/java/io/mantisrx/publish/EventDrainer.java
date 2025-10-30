@@ -58,7 +58,7 @@ class EventDrainer implements Runnable {
                  Clock clock) {
         this.config = config;
         this.mantisEventDrainTimer =
-                SpectatorUtils.buildAndRegisterTimer(registry, "mrePublishEventDrainTime");
+            SpectatorUtils.buildAndRegisterTimer(registry, "mrePublishEventDrainTime");
 
         this.streamManager = streamManager;
         this.eventProcessor = eventProcessor;
@@ -95,26 +95,28 @@ class EventDrainer implements Runnable {
 
                         final int finalQueueDepth = queueDepth;
                         streamManager.getStreamMetrics(stream)
-                                .ifPresent(m -> {
-                                    m.getMantisEventsQueuedGauge().set((double) finalQueueDepth);
-                                    if (finalQueueDepth > 0) {
-                                        m.updateLastEventOnStreamTimestamp();
-                                    }
-                                });
+                            .ifPresent(m -> {
+                                m.getMantisEventsQueuedGauge().set((double) finalQueueDepth);
+                                if (finalQueueDepth > 0) {
+                                    m.updateLastEventOnStreamTimestamp();
+                                }
+                            });
 
-                        streamEventList.stream()
-                                .map(e -> process(stream, e))
-                                .filter(Objects::nonNull)
-                                .forEach(e -> eventTransmitter.send(e, stream));
+                        for (Event streamEvent : streamEventList) {
+                            Event processedEvent = process(stream, streamEvent);
+                            if (processedEvent != null) {
+                                eventTransmitter.send(processedEvent, stream);
+                            }
+                        }
                         streamEventList.clear();
                     }
                 } catch (Exception e) {
                     LOG.warn("Exception processing events for stream {}", stream, e);
                     final int finalQueueDepth = queueDepth;
                     streamManager.getStreamMetrics(stream)
-                            .ifPresent(m -> {
-                                m.getMantisEventsDroppedProcessingExceptionCounter().increment(finalQueueDepth);
-                            });
+                        .ifPresent(m -> {
+                            m.getMantisEventsDroppedProcessingExceptionCounter().increment(finalQueueDepth);
+                        });
                 }
             }
             final long processingTime = clock.millis() - startTime;
@@ -130,7 +132,7 @@ class EventDrainer implements Runnable {
 
         final long processingTime = clock.millis() - startTime;
         streamManager.getStreamMetrics(stream)
-                .ifPresent(m -> m.getMantisEventsProcessTimeTimer().record(processingTime, TimeUnit.MILLISECONDS));
+            .ifPresent(m -> m.getMantisEventsProcessTimeTimer().record(processingTime, TimeUnit.MILLISECONDS));
 
         return processedEvent;
     }

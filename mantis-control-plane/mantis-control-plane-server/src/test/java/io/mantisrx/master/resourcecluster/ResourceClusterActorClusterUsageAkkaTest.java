@@ -176,7 +176,8 @@ public class ResourceClusterActorClusterUsageAkkaTest {
                 "",
                 false,
                 ImmutableMap.of("jdk", "8"),
-                new CpuWeightedFitnessCalculator());
+                new CpuWeightedFitnessCalculator(),
+                null);
 
         resourceClusterActor = actorSystem.actorOf(props);
         resourceCluster =
@@ -457,9 +458,9 @@ public class ResourceClusterActorClusterUsageAkkaTest {
 
     private void disableTE(TaskExecutorID taskExecutorID) throws Exception {
         assertEquals(Ack.getInstance(), resourceCluster.disableTaskExecutorsFor(
-            null,
-            Instant.now().plus(Duration.ofHours(1)),
-            Optional.of(taskExecutorID))
+                null,
+                Instant.now().plus(Duration.ofHours(1)),
+                Optional.of(taskExecutorID))
             .get());
     }
 

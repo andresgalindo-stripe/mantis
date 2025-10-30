@@ -63,29 +63,29 @@ class MetricsClientImpl<T> implements MetricsClient<T> {
         this.workerConnectionFunc = workerConnectionFunc;
         this.jobWorkerMetricsLocator = jobWorkerMetricsLocator;
         Metrics metrics = new Metrics.Builder()
-                .name(MetricsClientImpl.class.getCanonicalName() + "-" + jobId)
-                .addGauge(workersGuageName)
-                .addGauge(expectedWorkersGaugeName)
-                .addGauge(workerConnReceivingDataGaugeName)
-                .build();
+            .name(MetricsClientImpl.class.getCanonicalName() + "-" + jobId)
+            .addGauge(workersGuageName)
+            .addGauge(expectedWorkersGaugeName)
+            .addGauge(workerConnReceivingDataGaugeName)
+            .build();
         metrics = MetricsRegistry.getInstance().registerAndGet(metrics);
         workersGauge = metrics.getGauge(workersGuageName);
         expectedWorkersGauge = metrics.getGauge(expectedWorkersGaugeName);
         workerConnReceivingDataGauge = metrics.getGauge(workerConnReceivingDataGaugeName);
         numWorkersObservable
-                .doOnNext(new Action1<Integer>() {
-                    @Override
-                    public void call(Integer integer) {
-                        numWorkers.set(integer);
-                    }
-                })
-                .takeWhile(new Func1<Integer, Boolean>() {
-                    @Override
-                    public Boolean call(Integer integer) {
-                        return !nowClosed.get();
-                    }
-                })
-                .subscribe();
+            .doOnNext(new Action1<Integer>() {
+                @Override
+                public void call(Integer integer) {
+                    numWorkers.set(integer);
+                }
+            })
+            .takeWhile(new Func1<Integer, Boolean>() {
+                @Override
+                public Boolean call(Integer integer) {
+                    return !nowClosed.get();
+                }
+            })
+            .subscribe();
         this.workerConnectionsStatusObserver = workerConnectionsStatusObserver;
         this.dataRecvTimeoutSecs = dataRecvTimeoutSecs;
     }
@@ -107,50 +107,50 @@ class MetricsClientImpl<T> implements MetricsClient<T> {
     @Override
     public Observable<Observable<T>> getResults() {
         return Observable
-                .create(new Observable.OnSubscribe<Observable<T>>() {
-                    @Override
-                    public void call(final Subscriber subscriber) {
-                        internalGetResults().subscribe(subscriber);
-                    }
-                })
-                .subscribeOn(Schedulers.io());
+            .create(new Observable.OnSubscribe<Observable<T>>() {
+                @Override
+                public void call(final Subscriber subscriber) {
+                    internalGetResults().subscribe(subscriber);
+                }
+            })
+            .subscribeOn(Schedulers.io());
     }
 
     private Observable<Observable<T>> internalGetResults() {
         return jobWorkerMetricsLocator
-                .locateWorkerMetricsForJob(jobId)
-                .map(new Func1<EndpointChange, Observable<T>>() {
-                    @Override
-                    public Observable<T> call(EndpointChange endpointChange) {
-                        if (nowClosed.get())
-                            return Observable.empty();
-                        if (endpointChange.getType() == EndpointChange.Type.complete) {
-                            return handleEndpointClose(endpointChange);
-                        } else {
-                            return handleEndpointConnect(endpointChange);
-                        }
+            .locateWorkerMetricsForJob(jobId)
+            .map(new Func1<EndpointChange, Observable<T>>() {
+                @Override
+                public Observable<T> call(EndpointChange endpointChange) {
+                    if (nowClosed.get())
+                        return Observable.empty();
+                    if (endpointChange.getType() == EndpointChange.Type.complete) {
+                        return handleEndpointClose(endpointChange);
+                    } else {
+                        return handleEndpointConnect(endpointChange);
                     }
-                })
-                .lift(new Observable.Operator<Observable<T>, Observable<T>>() {
-                    @Override
-                    public Subscriber<? super Observable<T>> call(Subscriber<? super Observable<T>> subscriber) {
-                        subscriber.add(Subscriptions.create(new Action0() {
-                            @Override
-                            public void call() {
-                                try {
-                                    logger.warn("Closing metrics connections to workers of job " + jobId);
-                                    closeAllConnections();
-                                } catch (Exception e) {
-                                    throw new RuntimeException(e);
-                                }
+                }
+            })
+            .lift(new Observable.Operator<Observable<T>, Observable<T>>() {
+                @Override
+                public Subscriber<? super Observable<T>> call(Subscriber<? super Observable<T>> subscriber) {
+                    subscriber.add(Subscriptions.create(new Action0() {
+                        @Override
+                        public void call() {
+                            try {
+                                logger.warn("Closing metrics connections to workers of job " + jobId);
+                                closeAllConnections();
+                            } catch (Exception e) {
+                                throw new RuntimeException(e);
                             }
-                        }));
-                        return subscriber;
-                    }
-                })
-                .share()
-                .lift(new DropOperator<Observable<T>>("client_metrics_share"))
-                ;
+                        }
+                    }));
+                    return subscriber;
+                }
+            })
+            .share()
+            .lift(new DropOperator<Observable<T>>("client_metrics_share"))
+            ;
     }
 
     private Observable<T> handleEndpointConnect(EndpointChange ec) {
@@ -165,19 +165,19 @@ class MetricsClientImpl<T> implements MetricsClient<T> {
         }
 
         WorkerConnection<T> workerConnection = workerConnectionFunc.call(unwrappedHost, metricsPort,
-                new Action1<Boolean>() {
-                    @Override
-                    public void call(Boolean flag) {
-                        updateWorkerConx(flag);
-                    }
-                },
-                new Action1<Boolean>() {
-                    @Override
-                    public void call(Boolean flag) {
-                        updateWorkerDataReceivingStatus(flag);
-                    }
-                },
-                dataRecvTimeoutSecs
+            new Action1<Boolean>() {
+                @Override
+                public void call(Boolean flag) {
+                    updateWorkerConx(flag);
+                }
+            },
+            new Action1<Boolean>() {
+                @Override
+                public void call(Boolean flag) {
+                    updateWorkerDataReceivingStatus(flag);
+                }
+            },
+            dataRecvTimeoutSecs
         );
         if (nowClosed.get()) {// check if closed before adding
             try {
@@ -198,13 +198,13 @@ class MetricsClientImpl<T> implements MetricsClient<T> {
             }
         }
         return workerConnection.call()
-                //        		.flatMap(new Func1<Observable<T>, Observable<T>>() {
-                //            @Override
-                //            public Observable<T> call(Observable<T> tObservable) {
-                //                return tObservable;
-                //            }
-                //        })
-                ;
+            //        		.flatMap(new Func1<Observable<T>, Observable<T>>() {
+            //            @Override
+            //            public Observable<T> call(Observable<T> tObservable) {
+            //                return tObservable;
+            //            }
+            //        })
+            ;
     }
 
     private void updateWorkerDataReceivingStatus(Boolean flag) {
@@ -265,7 +265,7 @@ class MetricsClientImpl<T> implements MetricsClient<T> {
                     tWorkerConnection.close();
                 } catch (Exception e) {
                     logger.warn("Error closing worker metrics connection " + tWorkerConnection.getName() +
-                            " - " + e.getMessage(), e);
+                        " - " + e.getMessage(), e);
                 }
             }
         });
@@ -293,10 +293,10 @@ class MetricsClientImpl<T> implements MetricsClient<T> {
         private void closeOut(Action1<WorkerConnection<T>> onClose) {
             synchronized (workerConnections) {
                 isClosed = true;
-            }
-            for (WorkerConnection<T> workerConnection : workerConnections.values()) {
-                logger.info("Closing " + workerConnection.getName());
-                onClose.call(workerConnection);
+                for (WorkerConnection<T> workerConnection : workerConnections.values()) {
+                    logger.info("Closing " + workerConnection.getName());
+                    onClose.call(workerConnection);
+                }
             }
         }
     }

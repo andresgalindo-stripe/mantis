@@ -69,13 +69,13 @@ public class DefaultMantisApiClient implements MantisApiClient {
             logger.debug("job cluster mapping fetch url {}", uri);
             try {
                 HttpResponse response = httpClient.get(URI.create(uri))
-                        .withConnectTimeout(CONNECT_TIMEOUT_MS)
-                        .withReadTimeout(READ_TIMEOUT_MS)
-                        .send();
+                    .withConnectTimeout(CONNECT_TIMEOUT_MS)
+                    .withReadTimeout(READ_TIMEOUT_MS)
+                    .send();
                 int status = response.status();
                 if (status >= 200 && status < 300) {
                     AppJobClustersMap appJobClustersMap = serializer.fromJSON(response.entityAsString(), AppJobClustersMap.class);
-                    logger.debug(appJobClustersMap.toString());
+                    logger.debug("AppJobClustersMap: {}", appJobClustersMap);
                     return appJobClustersMap;
                 } else if (status >= 300 && status < 500) {
                     // TODO: handle redirects
@@ -99,9 +99,9 @@ public class DefaultMantisApiClient implements MantisApiClient {
             logger.debug("discovery info fetch url {}", uri);
             try {
                 HttpResponse response = httpClient.get(URI.create(uri))
-                        .withConnectTimeout(CONNECT_TIMEOUT_MS)
-                        .withReadTimeout(READ_TIMEOUT_MS)
-                        .send();
+                    .withConnectTimeout(CONNECT_TIMEOUT_MS)
+                    .withReadTimeout(READ_TIMEOUT_MS)
+                    .send();
                 int status = response.status();
                 if (status >= 200 && status < 300) {
                     JobSchedulingInfo jobSchedulingInfo = serializer.fromJSON(response.entityAsString(), JobSchedulingInfo.class);

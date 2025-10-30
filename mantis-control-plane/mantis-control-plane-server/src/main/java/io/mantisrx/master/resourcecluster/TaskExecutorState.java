@@ -75,6 +75,11 @@ class TaskExecutorState {
     @Nullable
     private WorkerId cancelledWorkerOnTask;
 
+    // previousWorkerId: tracks the last WorkerId this executor was running before disconnection
+    // This enables targeted notifications when the executor reconnects
+    @Nullable
+    private WorkerId previousWorkerId;
+
     static TaskExecutorState of(Clock clock, RpcService rpcService, JobMessageRouter jobMessageRouter) {
         return new TaskExecutorState(
             RegistrationState.Unregistered,
@@ -86,6 +91,7 @@ class TaskExecutorState {
             clock,
             rpcService,
             jobMessageRouter,
+            null,
             null);
     }
 
@@ -127,6 +133,8 @@ class TaskExecutorState {
         } else {
             state = RegistrationState.Unregistered;
             registration = null;
+            // Store the current WorkerId as previousWorkerId for potential reconnection notification
+            previousWorkerId = getWorkerId();
             setAvailabilityState(null);
             updateTicker();
             return true;
@@ -308,14 +316,23 @@ class TaskExecutorState {
         // is only marked as available after this gateway connection is successfully established with proper retry
         // loops (since the TE only register once and take the ack as success on API response).
         return rpcService.connect(registration.getTaskExecutorAddress(), TaskExecutorGateway.class)
-                .whenComplete((gateway, throwable) -> {
-                    if (throwable != null) {
-                        log.error("Failed to connect to the gateway", throwable);
-                    }
-                });
+            .whenComplete((gateway, throwable) -> {
+                if (throwable != null) {
+                    log.error("Failed to connect to the gateway", throwable);
+                }
+            });
     }
 
     boolean containsAttributes(Map<String, String> attributes) {
         return registration != null && registration.containsAttributes(attributes);
+    }
+
+    @Nullable
+    WorkerId getPreviousWorkerId() {
+        return previousWorkerId;
+    }
+
+    void clearPreviousWorkerId() {
+        this.previousWorkerId = null;
     }
 }

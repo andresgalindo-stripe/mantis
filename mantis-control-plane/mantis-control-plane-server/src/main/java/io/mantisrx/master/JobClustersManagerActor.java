@@ -77,12 +77,14 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.actor.SupervisorStrategy;
 import akka.actor.Terminated;
+import com.netflix.spectator.api.Registry;
 import io.mantisrx.common.metrics.Counter;
 import io.mantisrx.common.metrics.Metrics;
 import io.mantisrx.common.metrics.MetricsRegistry;
 import io.mantisrx.common.metrics.spectator.GaugeCallback;
 import io.mantisrx.common.metrics.spectator.MetricGroupId;
 import io.mantisrx.common.akka.MantisActorSupervisorStrategy;
+import io.mantisrx.common.metrics.spectator.SpectatorRegistryFactory;
 import io.mantisrx.master.events.LifecycleEventPublisher;
 import io.mantisrx.master.jobcluster.IJobClusterMetadata;
 import io.mantisrx.master.jobcluster.JobClusterActor;
@@ -138,6 +140,8 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
     private final Logger logger = LoggerFactory.getLogger(JobClustersManagerActor.class);
     private final long checkAgainInSecs = 30;
 
+    private final Registry spectatorRegistry;
+
     private final Counter numJobClusterInitFailures;
     private final Counter numJobClusterInitSuccesses;
     private Receive initializedBehavior;
@@ -161,14 +165,15 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
         this.eventPublisher = eventPublisher;
         this.costsCalculator = costsCalculator;
         this.slaHeadroomForAcceptedJobs = slaHeadroomForAcceptedJobs;
+        this.spectatorRegistry = SpectatorRegistryFactory.getRegistry();
 
         MetricGroupId metricGroupId = getMetricGroupId();
         Metrics m = new Metrics.Builder()
-                .id(metricGroupId)
-                .addCounter("numJobClusterInitFailures")
-                .addCounter("numJobClusterInitSuccesses")
+            .id(metricGroupId)
+            .addCounter("numJobClusterInitFailures")
+            .addCounter("numJobClusterInitSuccesses")
 
-                .build();
+            .build();
         m = MetricsRegistry.getInstance().registerAndGet(m);
         this.numJobClusterInitFailures = m.getCounter("numJobClusterInitFailures");
         this.numJobClusterInitSuccesses = m.getCounter("numJobClusterInitSuccesses");
@@ -221,56 +226,56 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
     private Receive getInitializedBehavior() {
         String state = "initialized";
         return receiveBuilder()
-                .match(ReconcileJobCluster.class, this::onReconcileJobClusters)
-                // Specific Job Cluster related messages
-                .match(CreateJobClusterRequest.class, this::onJobClusterCreate)
-                .match(JobClusterProto.InitializeJobClusterResponse.class, this::onJobClusterInitializeResponse)
-                .match(DeleteJobClusterRequest.class, this::onJobClusterDelete)
-                .match(JobClusterProto.DeleteJobClusterResponse.class, this::onJobClusterDeleteResponse)
-                .match(UpdateJobClusterRequest.class, this::onJobClusterUpdate)
-                .match(UpdateJobClusterSLARequest.class, this::onJobClusterUpdateSLA)
-                .match(UpdateJobClusterArtifactRequest.class, this::onJobClusterUpdateArtifact)
-                .match(UpdateSchedulingInfo.class, this::onJobClusterUpdateSchedulingInfo)
-                .match(UpdateJobClusterLabelsRequest.class, this::onJobClusterUpdateLabels)
-                .match(UpdateJobClusterWorkerMigrationStrategyRequest.class, this::onJobClusterUpdateWorkerMigrationConfig)
-                .match(EnableJobClusterRequest.class, this::onJobClusterEnable)
-                .match(DisableJobClusterRequest.class, this::onJobClusterDisable)
-                .match(GetJobClusterRequest.class, this::onJobClusterGet)
-                .match(ListCompletedJobsInClusterRequest.class, this::onJobListCompleted)
-                .match(GetLastSubmittedJobIdStreamRequest.class, this::onGetLastSubmittedJobIdSubject)
-                .match(ListArchivedWorkersRequest.class, this::onListArchivedWorkers)
-                // List Job Cluster related messages
-                .match(ListJobClustersRequest.class, this::onJobClustersList)
-                // List Jobs related messages
-                .match(ListJobsRequest.class, this::onJobList)
-                .match(ListJobIdsRequest.class, this::onJobIdList)
-                .match(ListWorkersRequest.class, this::onListActiveWorkers)
+            .match(ReconcileJobCluster.class, this::onReconcileJobClusters)
+            // Specific Job Cluster related messages
+            .match(CreateJobClusterRequest.class, this::onJobClusterCreate)
+            .match(JobClusterProto.InitializeJobClusterResponse.class, this::onJobClusterInitializeResponse)
+            .match(DeleteJobClusterRequest.class, this::onJobClusterDelete)
+            .match(JobClusterProto.DeleteJobClusterResponse.class, this::onJobClusterDeleteResponse)
+            .match(UpdateJobClusterRequest.class, this::onJobClusterUpdate)
+            .match(UpdateJobClusterSLARequest.class, this::onJobClusterUpdateSLA)
+            .match(UpdateJobClusterArtifactRequest.class, this::onJobClusterUpdateArtifact)
+            .match(UpdateSchedulingInfo.class, this::onJobClusterUpdateSchedulingInfo)
+            .match(UpdateJobClusterLabelsRequest.class, this::onJobClusterUpdateLabels)
+            .match(UpdateJobClusterWorkerMigrationStrategyRequest.class, this::onJobClusterUpdateWorkerMigrationConfig)
+            .match(EnableJobClusterRequest.class, this::onJobClusterEnable)
+            .match(DisableJobClusterRequest.class, this::onJobClusterDisable)
+            .match(GetJobClusterRequest.class, this::onJobClusterGet)
+            .match(ListCompletedJobsInClusterRequest.class, this::onJobListCompleted)
+            .match(GetLastSubmittedJobIdStreamRequest.class, this::onGetLastSubmittedJobIdSubject)
+            .match(ListArchivedWorkersRequest.class, this::onListArchivedWorkers)
+            // List Job Cluster related messages
+            .match(ListJobClustersRequest.class, this::onJobClustersList)
+            // List Jobs related messages
+            .match(ListJobsRequest.class, this::onJobList)
+            .match(ListJobIdsRequest.class, this::onJobIdList)
+            .match(ListWorkersRequest.class, this::onListActiveWorkers)
 
-                // job cluster scaler rules messages
-                .match(JobClusterScalerRuleProto.CreateScalerRuleRequest.class, this::onScalerRuleCreate)
-                .match(JobClusterScalerRuleProto.DeleteScalerRuleRequest.class, this::onScalerRuleDelete)
-                .match(JobClusterScalerRuleProto.GetScalerRulesRequest.class, this::onScalerRuleGet)
-                .match(JobClusterScalerRuleProto.GetJobScalerRuleStreamRequest.class, this::onGetJobScalerRuleStream)
+            // job cluster scaler rules messages
+            .match(JobClusterScalerRuleProto.CreateScalerRuleRequest.class, this::onScalerRuleCreate)
+            .match(JobClusterScalerRuleProto.DeleteScalerRuleRequest.class, this::onScalerRuleDelete)
+            .match(JobClusterScalerRuleProto.GetScalerRulesRequest.class, this::onScalerRuleGet)
+            .match(JobClusterScalerRuleProto.GetJobScalerRuleStreamRequest.class, this::onGetJobScalerRuleStream)
 
-                //delegate to job
-                .match(SubmitJobRequest.class, this::onJobSubmit)
-                .match(KillJobRequest.class, this::onJobKillRequest)
-              //  .match(JobClusterProto.KillJobResponse.class, this::onJobKillResponse)
-                .match(GetJobDetailsRequest.class, this::onGetJobDetailsRequest)
-                .match(GetJobSchedInfoRequest.class, this::onGetJobStatusSubject)
-                .match(GetLatestJobDiscoveryInfoRequest.class, this::onGetLatestJobDiscoveryInfo)
-                .match(ScaleStageRequest.class, this::onScaleStage)
-                .match(ResubmitWorkerRequest.class, this::onResubmitWorker)
+            //delegate to job
+            .match(SubmitJobRequest.class, this::onJobSubmit)
+            .match(KillJobRequest.class, this::onJobKillRequest)
+            //  .match(JobClusterProto.KillJobResponse.class, this::onJobKillResponse)
+            .match(GetJobDetailsRequest.class, this::onGetJobDetailsRequest)
+            .match(GetJobSchedInfoRequest.class, this::onGetJobStatusSubject)
+            .match(GetLatestJobDiscoveryInfoRequest.class, this::onGetLatestJobDiscoveryInfo)
+            .match(ScaleStageRequest.class, this::onScaleStage)
+            .match(ResubmitWorkerRequest.class, this::onResubmitWorker)
 
-                //delegate to worker
-                .match(WorkerEvent.class, this::onWorkerEvent)
-                .match(Terminated.class, this::onTerminated)
+            //delegate to worker
+            .match(WorkerEvent.class, this::onWorkerEvent)
+            .match(Terminated.class, this::onTerminated)
 
-                // Unexpected
-                .match(JobClustersManagerInitialize.class, (x) -> getSender().tell(new JobClustersManagerInitializeResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state) ), getSelf()))
+            // Unexpected
+            .match(JobClustersManagerInitialize.class, (x) -> getSender().tell(new JobClustersManagerInitializeResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state) ), getSelf()))
 
-                .matchAny(x -> logger.warn("unexpected message {} received by Job Cluster Manager actor. In initialized state ", x))
-                .build();
+            .matchAny(x -> logger.warn("unexpected message {} received by Job Cluster Manager actor. In initialized state ", x))
+            .build();
     }
 
     private String genUnexpectedMsg(String event, String state) {
@@ -280,50 +285,50 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
     private Receive getInitializingBehavior() {
         String state = "initializing";
         return receiveBuilder()
-                // EXPECTED MESSAGES BEGIN
-                .match(JobClustersManagerInitialize.class, this::initialize)
-                // EXPECTED MESSAGES END
+            // EXPECTED MESSAGES BEGIN
+            .match(JobClustersManagerInitialize.class, this::initialize)
+            // EXPECTED MESSAGES END
 
-                // UNEXPECTED MESSAGES BEGIN
-                .match(ReconcileJobCluster.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
-                .match(CreateJobClusterRequest.class, (x) -> getSender().tell(new CreateJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), x.getJobClusterDefinition().getName()), getSelf()))
-                .match(JobClusterProto.InitializeJobClusterResponse.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
-                .match(DeleteJobClusterRequest.class, (x) -> getSender().tell(new DeleteJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(JobClusterProto.DeleteJobClusterResponse.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
-                .match(UpdateJobClusterRequest.class, (x) -> getSender().tell(new UpdateJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(UpdateJobClusterSLARequest.class, (x) -> getSender().tell(new UpdateJobClusterSLAResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(UpdateJobClusterArtifactRequest.class, (x) -> getSender().tell(new UpdateJobClusterArtifactResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(UpdateSchedulingInfo.class, (x) -> getSender().tell(new UpdateSchedulingInfoResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(UpdateJobClusterLabelsRequest.class, (x) -> getSender().tell(new UpdateJobClusterLabelsResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(UpdateJobClusterWorkerMigrationStrategyRequest.class, (x) -> getSender().tell(new UpdateJobClusterWorkerMigrationStrategyResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(EnableJobClusterRequest.class, (x) -> getSender().tell(new EnableJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(DisableJobClusterRequest.class, (x) -> getSender().tell(new DisableJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(GetJobClusterRequest.class, (x) -> getSender().tell(new GetJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
-                .match(ListCompletedJobsInClusterRequest.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
-                .match(GetLastSubmittedJobIdStreamRequest.class, (x) -> getSender().tell(new GetLastSubmittedJobIdStreamResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
-                .match(ListArchivedWorkersRequest.class, (x) -> getSender().tell(new ListArchivedWorkersResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
-                .match(ListJobClustersRequest.class, (x) -> getSender().tell(new ListJobClustersResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
-                .match(ListJobsRequest.class, (x) -> getSender().tell(new ListJobsResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
-                .match(ListJobIdsRequest.class, (x) -> getSender().tell(new ListJobIdsResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
-                .match(ListWorkersRequest.class, (x) -> getSender().tell(new ListWorkersResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
-                .match(SubmitJobRequest.class, (x) -> getSender().tell(new SubmitJobResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
-                .match(KillJobRequest.class, (x) -> getSender().tell(new KillJobResponse(x.requestId, CLIENT_ERROR, JobState.Noop, genUnexpectedMsg(x.toString(), state), x.getJobId(), x.getUser()), getSelf()))
-                .match(JobClusterProto.KillJobResponse.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
-                .match(GetJobDetailsRequest.class, (x) -> getSender().tell(new GetJobDetailsResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
-                .match(GetJobSchedInfoRequest.class, (x) -> getSender().tell(new GetJobSchedInfoResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
-                .match(GetLatestJobDiscoveryInfoRequest.class, (x) -> getSender().tell(new GetLatestJobDiscoveryInfoResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
-                .match(ScaleStageRequest.class, (x) -> getSender().tell(new ScaleStageResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), 0), getSelf()))
-                .match(ResubmitWorkerRequest.class, (x) -> getSender().tell(new ResubmitWorkerResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
-                .match(WorkerEvent.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
-                .match(JobClusterScalerRuleProto.CreateScalerRuleRequest.class, (x) -> getSender().tell(JobClusterScalerRuleProto.CreateScalerRuleResponse.builder().requestId(x.requestId).responseCode(CLIENT_ERROR_NOT_FOUND).message(genUnexpectedMsg(x.toString(), state)).build(), getSelf()))
-                .match(JobClusterScalerRuleProto.DeleteScalerRuleRequest.class, (x) -> getSender().tell(JobClusterScalerRuleProto.DeleteScalerRuleResponse.builder().requestId(x.requestId).responseCode(CLIENT_ERROR_NOT_FOUND).message(genUnexpectedMsg(x.toString(), state)).build(), getSelf()))
-                .match(JobClusterScalerRuleProto.GetScalerRulesRequest.class, (x) -> getSender().tell(JobClusterScalerRuleProto.GetScalerRulesResponse.builder().requestId(x.requestId).responseCode(CLIENT_ERROR_NOT_FOUND).message(genUnexpectedMsg(x.toString(), state)).build(), getSelf()))
-                .match(JobClusterScalerRuleProto.GetJobScalerRuleStreamRequest.class, (x) -> getSender().tell(JobClusterScalerRuleProto.GetJobScalerRuleStreamResponse.builder().requestId(x.requestId).responseCode(CLIENT_ERROR_NOT_FOUND).message(genUnexpectedMsg(x.toString(), state)).build(), getSelf()))
+            // UNEXPECTED MESSAGES BEGIN
+            .match(ReconcileJobCluster.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
+            .match(CreateJobClusterRequest.class, (x) -> getSender().tell(new CreateJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), x.getJobClusterDefinition().getName()), getSelf()))
+            .match(JobClusterProto.InitializeJobClusterResponse.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
+            .match(DeleteJobClusterRequest.class, (x) -> getSender().tell(new DeleteJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(JobClusterProto.DeleteJobClusterResponse.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
+            .match(UpdateJobClusterRequest.class, (x) -> getSender().tell(new UpdateJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(UpdateJobClusterSLARequest.class, (x) -> getSender().tell(new UpdateJobClusterSLAResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(UpdateJobClusterArtifactRequest.class, (x) -> getSender().tell(new UpdateJobClusterArtifactResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(UpdateSchedulingInfo.class, (x) -> getSender().tell(new UpdateSchedulingInfoResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(UpdateJobClusterLabelsRequest.class, (x) -> getSender().tell(new UpdateJobClusterLabelsResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(UpdateJobClusterWorkerMigrationStrategyRequest.class, (x) -> getSender().tell(new UpdateJobClusterWorkerMigrationStrategyResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(EnableJobClusterRequest.class, (x) -> getSender().tell(new EnableJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(DisableJobClusterRequest.class, (x) -> getSender().tell(new DisableJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(GetJobClusterRequest.class, (x) -> getSender().tell(new GetJobClusterResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
+            .match(ListCompletedJobsInClusterRequest.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
+            .match(GetLastSubmittedJobIdStreamRequest.class, (x) -> getSender().tell(new GetLastSubmittedJobIdStreamResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
+            .match(ListArchivedWorkersRequest.class, (x) -> getSender().tell(new ListArchivedWorkersResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
+            .match(ListJobClustersRequest.class, (x) -> getSender().tell(new ListJobClustersResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
+            .match(ListJobsRequest.class, (x) -> getSender().tell(new ListJobsResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
+            .match(ListJobIdsRequest.class, (x) -> getSender().tell(new ListJobIdsResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
+            .match(ListWorkersRequest.class, (x) -> getSender().tell(new ListWorkersResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), Lists.newArrayList()), getSelf()))
+            .match(SubmitJobRequest.class, (x) -> getSender().tell(new SubmitJobResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
+            .match(KillJobRequest.class, (x) -> getSender().tell(new KillJobResponse(x.requestId, CLIENT_ERROR, JobState.Noop, genUnexpectedMsg(x.toString(), state), x.getJobId(), x.getUser()), getSelf()))
+            .match(JobClusterProto.KillJobResponse.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
+            .match(GetJobDetailsRequest.class, (x) -> getSender().tell(new GetJobDetailsResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
+            .match(GetJobSchedInfoRequest.class, (x) -> getSender().tell(new GetJobSchedInfoResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
+            .match(GetLatestJobDiscoveryInfoRequest.class, (x) -> getSender().tell(new GetLatestJobDiscoveryInfoResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), empty()), getSelf()))
+            .match(ScaleStageRequest.class, (x) -> getSender().tell(new ScaleStageResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state), 0), getSelf()))
+            .match(ResubmitWorkerRequest.class, (x) -> getSender().tell(new ResubmitWorkerResponse(x.requestId, CLIENT_ERROR, genUnexpectedMsg(x.toString(), state)), getSelf()))
+            .match(WorkerEvent.class, (x) -> logger.warn(genUnexpectedMsg(x.toString(), state)))
+            .match(JobClusterScalerRuleProto.CreateScalerRuleRequest.class, (x) -> getSender().tell(JobClusterScalerRuleProto.CreateScalerRuleResponse.builder().requestId(x.requestId).responseCode(CLIENT_ERROR_NOT_FOUND).message(genUnexpectedMsg(x.toString(), state)).build(), getSelf()))
+            .match(JobClusterScalerRuleProto.DeleteScalerRuleRequest.class, (x) -> getSender().tell(JobClusterScalerRuleProto.DeleteScalerRuleResponse.builder().requestId(x.requestId).responseCode(CLIENT_ERROR_NOT_FOUND).message(genUnexpectedMsg(x.toString(), state)).build(), getSelf()))
+            .match(JobClusterScalerRuleProto.GetScalerRulesRequest.class, (x) -> getSender().tell(JobClusterScalerRuleProto.GetScalerRulesResponse.builder().requestId(x.requestId).responseCode(CLIENT_ERROR_NOT_FOUND).message(genUnexpectedMsg(x.toString(), state)).build(), getSelf()))
+            .match(JobClusterScalerRuleProto.GetJobScalerRuleStreamRequest.class, (x) -> getSender().tell(JobClusterScalerRuleProto.GetJobScalerRuleStreamResponse.builder().requestId(x.requestId).responseCode(CLIENT_ERROR_NOT_FOUND).message(genUnexpectedMsg(x.toString(), state)).build(), getSelf()))
 
-                // everything else
-                .matchAny(x -> logger.warn("unexpected message {} received by Job Cluster Manager actor. It needs to be initialized first ", x))
-                // UNEXPECTED MESSAGES BEGIN
-                .build();
+            // everything else
+            .matchAny(x -> logger.warn("unexpected message {} received by Job Cluster Manager actor. It needs to be initialized first ", x))
+            // UNEXPECTED MESSAGES BEGIN
+            .build();
     }
 
 
@@ -367,46 +372,46 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
                 long masterInitTimeoutSecs = ConfigurationProvider.getConfig().getMasterInitTimeoutSecs();
                 long timeout = ((masterInitTimeoutSecs - 60)) > 0 ? (masterInitTimeoutSecs - 60) : masterInitTimeoutSecs;
                 Observable.from(jobClusterMap.values())
-                        .filter((jobClusterMeta) -> jobClusterMeta != null && jobClusterMeta.getJobClusterDefinition() != null)
-                        .flatMap((jobClusterMeta) -> {
-                            Duration t = Duration.ofSeconds(timeout);
-                            Optional<JobClusterInfo> jobClusterInfoO = jobClusterInfoManager.createClusterActorAndRegister(jobClusterMeta.getJobClusterDefinition());
-                            if (!jobClusterInfoO.isPresent()) {
-                                logger.info("skipping job cluster {} on bootstrap as actor creating failed", jobClusterMeta.getJobClusterDefinition().getName());
-                                return Observable.empty();
-                            }
-                            JobClusterInfo jobClusterInfo = jobClusterInfoO.get();
-                            List<IMantisJobMetadata> jobList = Lists.newArrayList();
-                            List<IMantisJobMetadata> jList = clusterToJobMap.get(jobClusterMeta.getJobClusterDefinition().getName());
-                            if (jList != null) {
-                                jobList.addAll(jList);
-                            }
+                    .filter((jobClusterMeta) -> jobClusterMeta != null && jobClusterMeta.getJobClusterDefinition() != null)
+                    .flatMap((jobClusterMeta) -> {
+                        Duration t = Duration.ofSeconds(timeout);
+                        Optional<JobClusterInfo> jobClusterInfoO = jobClusterInfoManager.createClusterActorAndRegister(jobClusterMeta.getJobClusterDefinition());
+                        if (!jobClusterInfoO.isPresent()) {
+                            logger.info("skipping job cluster {} on bootstrap as actor creating failed", jobClusterMeta.getJobClusterDefinition().getName());
+                            return Observable.empty();
+                        }
+                        JobClusterInfo jobClusterInfo = jobClusterInfoO.get();
+                        List<IMantisJobMetadata> jobList = Lists.newArrayList();
+                        List<IMantisJobMetadata> jList = clusterToJobMap.get(jobClusterMeta.getJobClusterDefinition().getName());
+                        if (jList != null) {
+                            jobList.addAll(jList);
+                        }
 
-                            List<CompletedJob> completedJobsList = Lists.newArrayList();
-                            JobClusterProto.InitializeJobClusterRequest req = new JobClusterProto.InitializeJobClusterRequest((JobClusterDefinitionImpl) jobClusterMeta.getJobClusterDefinition(),
-                                jobClusterMeta.isDisabled(), jobClusterMeta.getLastJobCount(), jobList,
-                                "system", getSelf(), false);
-                            return jobClusterInfoManager.initializeCluster(jobClusterInfo, req, t);
+                        List<CompletedJob> completedJobsList = Lists.newArrayList();
+                        JobClusterProto.InitializeJobClusterRequest req = new JobClusterProto.InitializeJobClusterRequest((JobClusterDefinitionImpl) jobClusterMeta.getJobClusterDefinition(),
+                            jobClusterMeta.isDisabled(), jobClusterMeta.getLastJobCount(), jobList,
+                            "system", getSelf(), false);
+                        return jobClusterInfoManager.initializeCluster(jobClusterInfo, req, t);
 
 
-                        })
-                        .filter(Objects::nonNull)
-                        .toBlocking()
-                        .subscribe((clusterInit) -> {
-                            logger.info("JobCluster {} inited with code {}", clusterInit.jobClusterName, clusterInit.responseCode);
-                            numJobClusterInitSuccesses.increment();
-                        }, (error) -> {
-                            logger.warn("Exception initializing clusters {}", error.getMessage(), error);
+                    })
+                    .filter(Objects::nonNull)
+                    .toBlocking()
+                    .subscribe((clusterInit) -> {
+                        logger.info("JobCluster {} inited with code {}", clusterInit.jobClusterName, clusterInit.responseCode);
+                        numJobClusterInitSuccesses.increment();
+                    }, (error) -> {
+                        logger.warn("Exception initializing clusters {}", error.getMessage(), error);
 
-                            logger.error("JobClusterManagerActor had errors during initialization NOT transitioning to initialized behavior");
-                          //  getContext().become(initializedBehavior);
-                            sender.tell(new JobClustersManagerInitializeResponse(initMsg.requestId, SERVER_ERROR, "JobClustersManager  inited with errors"), getSelf());
+                        logger.error("JobClusterManagerActor had errors during initialization NOT transitioning to initialized behavior");
+                        //  getContext().become(initializedBehavior);
+                        sender.tell(new JobClustersManagerInitializeResponse(initMsg.requestId, SERVER_ERROR, "JobClustersManager  inited with errors"), getSelf());
 
-                        }, () -> {
-                            logger.info("JobClusterManagerActor transitioning to initialized behavior");
-                            getContext().become(initializedBehavior);
-                            sender.tell(new JobClustersManagerInitializeResponse(initMsg.requestId, SUCCESS, "JobClustersManager successfully inited"), getSelf());
-                        });
+                    }, () -> {
+                        logger.info("JobClusterManagerActor transitioning to initialized behavior");
+                        getContext().become(initializedBehavior);
+                        sender.tell(new JobClustersManagerInitializeResponse(initMsg.requestId, SUCCESS, "JobClustersManager successfully inited"), getSelf());
+                    });
 
                 getTimers().startPeriodicTimer(CHECK_CLUSTERS_TIMER_KEY, new ReconcileJobCluster(), Duration.ofSeconds(checkAgainInSecs));
                 // kick off loading of archived jobs
@@ -426,9 +431,9 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
     @Override
     public void onReconcileJobClusters(ReconcileJobCluster p) {
         Set<JobClusterInfo> jobClusterInfos = this.jobClusterInfoManager.getAllJobClusterInfo().values().stream()
-                .filter((jci) -> ((jci.currentState == JobClusterInfo.JobClusterState.INITIALIZING || jci.currentState == JobClusterInfo.JobClusterState.DELETING)
-                        && (p.timeOfEnforcement.toEpochMilli() - jci.stateUpdateTime) > STATE_TRANSITION_TIMEOUT_MSECS))
-                .collect(Collectors.toSet());
+            .filter((jci) -> ((jci.currentState == JobClusterInfo.JobClusterState.INITIALIZING || jci.currentState == JobClusterInfo.JobClusterState.DELETING)
+                && (p.timeOfEnforcement.toEpochMilli() - jci.stateUpdateTime) > STATE_TRANSITION_TIMEOUT_MSECS))
+            .collect(Collectors.toSet());
         if(jobClusterInfos.size() > 0) {
             logger.warn("{} JobClusters stuck in initializing/deleting state ", jobClusterInfos.size());
             jobClusterInfos.stream().forEach((jci) -> {
@@ -460,6 +465,12 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
                 Optional<JobClusterInfo> jobClusterInfoO = jobClusterInfoManager.createClusterActorAndRegister(request.getJobClusterDefinition());
                 if (jobClusterInfoO.isPresent()) {
                     jobClusterInfoManager.initializeClusterAsync(jobClusterInfoO.get(), new JobClusterProto.InitializeJobClusterRequest(request.getJobClusterDefinition(), request.getUser(), getSender()));
+                    spectatorRegistry
+                        .counter(
+                            "jobClustersManagerActor_create",
+                            "jobClusterName", name,
+                            "user", request.getUser())
+                        .increment();
                 } else {
                     getSender().tell(new CreateJobClusterResponse(
                         request.requestId, CLIENT_ERROR,
@@ -468,15 +479,15 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
                 }
             } catch (Exception e) {
                 getSender().tell(new CreateJobClusterResponse(
-                        request.requestId, SERVER_ERROR,
-                        "Job Cluster " + request.getJobClusterDefinition().getName() + " could not be created due to " + e.getMessage(),
-                        request.getJobClusterDefinition().getName()), getSelf());
+                    request.requestId, SERVER_ERROR,
+                    "Job Cluster " + request.getJobClusterDefinition().getName() + " could not be created due to " + e.getMessage(),
+                    request.getJobClusterDefinition().getName()), getSelf());
             }
         } else {
             getSender().tell(new CreateJobClusterResponse(
-                    request.requestId, CLIENT_ERROR_CONFLICT,
-                    "Job Cluster " + request.getJobClusterDefinition().getName() + " already exists",
-                    request.getJobClusterDefinition().getName()), getSelf());
+                request.requestId, CLIENT_ERROR_CONFLICT,
+                "Job Cluster " + request.getJobClusterDefinition().getName() + " already exists",
+                request.getJobClusterDefinition().getName()), getSelf());
         }
 
     }
@@ -507,6 +518,12 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
         } else {
             sender.tell(new UpdateJobClusterResponse(request.requestId, CLIENT_ERROR_NOT_FOUND, "JobCluster " + request.getJobClusterDefinition().getName() + " doesn't exist"), getSelf());
         }
+        spectatorRegistry
+            .counter(
+                "jobClustersManagerActor_update",
+                "jobClusterName", request.getJobClusterDefinition().getName(),
+                "user", request.getUser())
+            .increment();
     }
 
     @Override
@@ -658,8 +675,8 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
 
         if(jobClusterInfo.isPresent()) {
             jobClusterInfo.get().jobClusterActor.tell(
-                    new JobClusterProto.KillJobRequest(request.getJobId(), request.getReason(),
-                            JobCompletedReason.Killed, request.getUser(), sender), getSelf());
+                new JobClusterProto.KillJobRequest(request.getJobId(), request.getReason(),
+                    JobCompletedReason.Killed, request.getUser(), sender), getSelf());
         } else {
             logger.info("Job cluster {} not found", jobIdToKill.getCluster());
             sender.tell(new KillJobResponse(request.requestId, CLIENT_ERROR_NOT_FOUND, JobState.Noop, "Job cluster " + jobIdToKill.getCluster() + " doesn't exist", jobIdToKill, request.getUser()), getSelf());
@@ -897,7 +914,7 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
 
     }
 
-     class JobClusterInfoManager {
+    class JobClusterInfoManager {
 
         private final Map<String, JobClusterInfo> jobClusterNameToInfoMap = new HashMap<>();
 
@@ -922,14 +939,14 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
             this.metrics = MetricsRegistry.getInstance().registerAndGet(m);
         }
 
-         /**
-          * Creates the job cluster Actor
-          * Watches it
-          * Adds it to internal map and publishes Lifecycle event
-          * Could throw an unchecked exception if actor creation fails
-          * @param jobClusterDefn
-          * @return jobClusterInfo if actor creation and registration succeeds, else empty
-          */
+        /**
+         * Creates the job cluster Actor
+         * Watches it
+         * Adds it to internal map and publishes Lifecycle event
+         * Could throw an unchecked exception if actor creation fails
+         * @param jobClusterDefn
+         * @return jobClusterInfo if actor creation and registration succeeds, else empty
+         */
         Optional<JobClusterInfo> createClusterActorAndRegister(IJobClusterDefinition jobClusterDefn) {
             String clusterName = jobClusterDefn.getName();
             if(!isClusterExists(clusterName)) {
@@ -969,33 +986,33 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
         }
 
         Observable<JobClusterProto.InitializeJobClusterResponse> initializeCluster(JobClusterInfo jobClusterInfo, JobClusterProto.InitializeJobClusterRequest req, Duration t) {
-             jobClusterInfo.markInitializing(req, System.currentTimeMillis());
-             CompletionStage<JobClusterProto.InitializeJobClusterResponse> respCS =  ask(jobClusterInfo.jobClusterActor, req, t)
-                     .thenApply(JobClusterProto.InitializeJobClusterResponse.class::cast);
+            jobClusterInfo.markInitializing(req, System.currentTimeMillis());
+            CompletionStage<JobClusterProto.InitializeJobClusterResponse> respCS =  ask(jobClusterInfo.jobClusterActor, req, t)
+                .thenApply(JobClusterProto.InitializeJobClusterResponse.class::cast);
             return Observable.from(respCS.toCompletableFuture(),Schedulers.io())
-                    .map((resp)-> {
-                        logger.info("JobCluster {} inited with code {}", resp.jobClusterName, resp.responseCode);
-                        Optional<JobClusterInfo> jClusterInfo = jobClusterInfoManager.getJobClusterInfo(resp.jobClusterName);
-                        if(resp.responseCode == SUCCESS) {
-                            jClusterInfo.ifPresent((jci) -> jci.markInitialized(System.currentTimeMillis()));
-                        }
+                .map((resp)-> {
+                    logger.info("JobCluster {} inited with code {}", resp.jobClusterName, resp.responseCode);
+                    Optional<JobClusterInfo> jClusterInfo = jobClusterInfoManager.getJobClusterInfo(resp.jobClusterName);
+                    if(resp.responseCode == SUCCESS) {
+                        jClusterInfo.ifPresent((jci) -> jci.markInitialized(System.currentTimeMillis()));
+                    }
 
-                        return resp;
-                    })
-                    .onErrorResumeNext(ex -> {
+                    return resp;
+                })
+                .onErrorResumeNext(ex -> {
 
-                        logger.warn("caught exception {}", ex.getMessage(), ex);
-                        numJobClusterInitFailures.increment();
+                    logger.warn("caught exception {}", ex.getMessage(), ex);
+                    numJobClusterInitFailures.increment();
 
-                        // initialization fails deregister cluster
-                        deregisterJobCluster(jobClusterInfo.clusterName);
-                        return Observable.just(new JobClusterProto.InitializeJobClusterResponse(req.requestId, BaseResponse.ResponseCode.SERVER_ERROR,ex.getMessage(), jobClusterInfo.clusterName, ActorRef.noSender()));
-                    });
+                    // initialization fails deregister cluster
+                    deregisterJobCluster(jobClusterInfo.clusterName);
+                    return Observable.just(new JobClusterProto.InitializeJobClusterResponse(req.requestId, BaseResponse.ResponseCode.SERVER_ERROR,ex.getMessage(), jobClusterInfo.clusterName, ActorRef.noSender()));
+                });
         }
 
         void initializeClusterAsync(JobClusterInfo jobClusterInfo, JobClusterProto.InitializeJobClusterRequest req) {
-             jobClusterInfo.markInitializing(req,System.currentTimeMillis());
-             jobClusterInfo.jobClusterActor.tell(req, getSelf());
+            jobClusterInfo.markInitializing(req,System.currentTimeMillis());
+            jobClusterInfo.jobClusterActor.tell(req, getSelf());
         }
 
 
@@ -1018,73 +1035,79 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
 
 
         void processInitializeResponse(JobClusterProto.InitializeJobClusterResponse createResp) {
-             Optional<JobClusterInfo> jClusterInfo = getJobClusterInfo(createResp.jobClusterName);
-             if(jClusterInfo.isPresent()) {
-                 JobClusterInfo jobClusterInfo = jClusterInfo.get();
-                 if(createResp.responseCode == SUCCESS) {
-                      jobClusterInfo.markInitialized(System.currentTimeMillis());
-                     createResp.requestor.tell(
-                             new CreateJobClusterResponse(createResp.requestId,
-                                                          SUCCESS_CREATED,
-                                                          createResp.jobClusterName + " created",
-                                                          createResp.jobClusterName),
-                             getSelf());
-                 } else if( createResp.responseCode == SERVER_ERROR){
-                     deregisterJobCluster(createResp.jobClusterName);
-                     createResp.requestor.tell(new CreateJobClusterResponse(createResp.requestId, createResp.responseCode, createResp.message, createResp.jobClusterName), getSelf());
-                 }
+            Optional<JobClusterInfo> jClusterInfo = getJobClusterInfo(createResp.jobClusterName);
+            if(jClusterInfo.isPresent()) {
+                JobClusterInfo jobClusterInfo = jClusterInfo.get();
+                if(createResp.responseCode == SUCCESS) {
+                    jobClusterInfo.markInitialized(System.currentTimeMillis());
+                    createResp.requestor.tell(
+                        new CreateJobClusterResponse(createResp.requestId,
+                            SUCCESS_CREATED,
+                            createResp.jobClusterName + " created",
+                            createResp.jobClusterName),
+                        getSelf());
+                } else if( createResp.responseCode == SERVER_ERROR){
+                    deregisterJobCluster(createResp.jobClusterName);
+                    createResp.requestor.tell(new CreateJobClusterResponse(createResp.requestId, createResp.responseCode, createResp.message, createResp.jobClusterName), getSelf());
+                }
 
-             } else {
-                 logger.warn("Received JobClusterInitializeResponse {} for unknown Job Cluster {}", createResp, createResp.jobClusterName);
-             }
+            } else {
+                logger.warn("Received JobClusterInitializeResponse {} for unknown Job Cluster {}", createResp, createResp.jobClusterName);
+            }
 
-         }
+        }
 
-         void processDeleteRequest(DeleteJobClusterRequest request) {
-             Optional<JobClusterInfo> jobClusterInfoOp= getJobClusterInfo(request.getName());
-             ActorRef sender = getSender();
-             if (jobClusterInfoOp.isPresent()) {
-                 JobClusterInfo jobClusterInfo = jobClusterInfoOp.get();
-                 jobClusterInfo.jobClusterActor.tell(
-                         new JobClusterProto.DeleteJobClusterRequest(request.getUser(), request.getName(), sender),
-                         getSelf());
-                 jobClusterInfo.markDeleting(System.currentTimeMillis());
+        void processDeleteRequest(DeleteJobClusterRequest request) {
+            Optional<JobClusterInfo> jobClusterInfoOp= getJobClusterInfo(request.getName());
+            ActorRef sender = getSender();
+            if (jobClusterInfoOp.isPresent()) {
+                JobClusterInfo jobClusterInfo = jobClusterInfoOp.get();
+                jobClusterInfo.jobClusterActor.tell(
+                    new JobClusterProto.DeleteJobClusterRequest(request.getUser(), request.getName(), sender),
+                    getSelf());
+                jobClusterInfo.markDeleting(System.currentTimeMillis());
+                spectatorRegistry
+                    .counter(
+                        "jobClustersManagerActor_delete",
+                        "jobClusterName", request.getName(),
+                        "user", request.getUser())
+                    .increment();
 
-             } else {
-                 sender.tell(
-                         new DeleteJobClusterResponse(request.requestId, CLIENT_ERROR_NOT_FOUND, "JobCluster " + request.getName() + " doesn't exist"),
-                         getSelf());
-             }
-         }
+            } else {
+                sender.tell(
+                    new DeleteJobClusterResponse(request.requestId, CLIENT_ERROR_NOT_FOUND, "JobCluster " + request.getName() + " doesn't exist"),
+                    getSelf());
+            }
+        }
 
-         void processDeleteResponse(JobClusterProto.DeleteJobClusterResponse resp) {
-             Optional<JobClusterInfo> jobClusterInfoOp= getJobClusterInfo(resp.clusterName);
-             if(jobClusterInfoOp.isPresent()) {
-                 if(resp.responseCode == SUCCESS) {
-                     deregisterJobCluster(resp.clusterName);
+        void processDeleteResponse(JobClusterProto.DeleteJobClusterResponse resp) {
+            Optional<JobClusterInfo> jobClusterInfoOp= getJobClusterInfo(resp.clusterName);
+            if(jobClusterInfoOp.isPresent()) {
+                if(resp.responseCode == SUCCESS) {
+                    deregisterJobCluster(resp.clusterName);
 
-                 }
+                }
 
-             } else {
-                 // No Such job cluster ignore
-                 logger.warn("Received delete job cluster response {} for unknown job cluster {}", resp, resp.clusterName);
-             }
+            } else {
+                // No Such job cluster ignore
+                logger.warn("Received delete job cluster response {} for unknown job cluster {}", resp, resp.clusterName);
+            }
 
-             // inform caller
-             resp.requestingActor.tell(
-                     new DeleteJobClusterResponse(resp.requestId, resp.responseCode, resp.message)
-                     , getSelf());
+            // inform caller
+            resp.requestingActor.tell(
+                new DeleteJobClusterResponse(resp.requestId, resp.responseCode, resp.message)
+                , getSelf());
 
-         }
-     }
+        }
+    }
 
-     @Value
-     public static class UpdateSchedulingInfo {
-         long requestId;
-         String clusterName;
-         SchedulingInfo schedulingInfo;
-         String version;
-     }
+    @Value
+    public static class UpdateSchedulingInfo {
+        long requestId;
+        String clusterName;
+        SchedulingInfo schedulingInfo;
+        String version;
+    }
 
     static class JobClusterInfo {
 
@@ -1150,12 +1173,12 @@ public class JobClustersManagerActor extends AbstractActorWithTimers implements 
         @Override
         public String toString() {
             return "JobClusterInfo{" +
-                    "clusterName='" + clusterName + '\'' +
-                    ", jobClusterActor=" + jobClusterActor +
-                    ", currentState=" + currentState +
-                    ", stateUpdateTime=" + stateUpdateTime +
-                    ", jobClusterDefinition=" + jobClusterDefinition +
-                    '}';
+                "clusterName='" + clusterName + '\'' +
+                ", jobClusterActor=" + jobClusterActor +
+                ", currentState=" + currentState +
+                ", stateUpdateTime=" + stateUpdateTime +
+                ", jobClusterDefinition=" + jobClusterDefinition +
+                '}';
         }
     }
 

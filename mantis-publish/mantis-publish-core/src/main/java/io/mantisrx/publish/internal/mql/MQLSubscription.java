@@ -39,14 +39,10 @@ public class MQLSubscription implements Subscription, Comparable {
 
     private static final Logger LOG = LoggerFactory.getLogger(MQLSubscription.class);
     protected final Query query;
-    private AtomicBoolean matcherErrorLoggingEnabled;
-    private AtomicBoolean projectorErrorLoggingEnabled;
+    private final AtomicBoolean matcherErrorLoggingEnabled;
+    private final AtomicBoolean projectorErrorLoggingEnabled;
 
-    private ConcurrentHashMap<
-            HashSet<Query>,
-            Function<
-                    Map<String, Object>,
-                    Map<String, Object>>> superSetProjectorCache;
+    private final ConcurrentHashMap<HashSet<Query>, Function<Map<String, Object>, Map<String, Object>>> superSetProjectorCache;
 
     public MQLSubscription(String subId, String criterion) {
         this.superSetProjectorCache = new ConcurrentHashMap<>();
@@ -56,11 +52,11 @@ public class MQLSubscription implements Subscription, Comparable {
     }
 
     private Map<String, Object> projectSuperSet(
-            Collection<Query> queries, Map<String, Object> datum) {
+        Collection<Query> queries, Map<String, Object> datum) {
 
         Function<Map<String, Object>, Map<String, Object>> superSetProjector =
-                superSetProjectorCache.computeIfAbsent(
-                        new HashSet<>(queries), MQL::makeSupersetProjector);
+            superSetProjectorCache.computeIfAbsent(
+                new HashSet<>(queries), MQL::makeSupersetProjector);
 
         return superSetProjector.apply(datum);
     }
@@ -88,16 +84,16 @@ public class MQLSubscription implements Subscription, Comparable {
         } catch (Exception e) {
             if (projectorErrorLoggingEnabled.get()) {
                 LOG.error("MQL projector produced an exception on queries: {}\ndatum: {}.",
-                        queries, event.getMap());
+                    queries, event.getMap());
                 projectorErrorLoggingEnabled.set(false);
             }
 
             Event error = new Event();
             error.set("message", e.getMessage());
             error.set("queries",
-                    queries.stream()
-                            .map(Query::getRawQuery)
-                            .collect(Collectors.joining(", ")));
+                queries.stream()
+                    .map(Query::getRawQuery)
+                    .collect(Collectors.joining(", ")));
 
             return error;
         }
@@ -109,7 +105,7 @@ public class MQLSubscription implements Subscription, Comparable {
         } catch (Exception ex) {
             if (matcherErrorLoggingEnabled.get()) {
                 LOG.error("MQL matcher produced an exception on query: {}\ndatum: {}.",
-                        this.query.getRawQuery(), event.getMap());
+                    this.query.getRawQuery(), event.getMap());
                 matcherErrorLoggingEnabled.set(false);
             }
 
@@ -127,7 +123,7 @@ public class MQLSubscription implements Subscription, Comparable {
         final int prime = 31;
         int result = 1;
         result = prime * result
-                + ((this.query == null) ? 0 : this.query.hashCode());
+            + ((this.query == null) ? 0 : this.query.hashCode());
         return result;
     }
 
@@ -172,6 +168,6 @@ public class MQLSubscription implements Subscription, Comparable {
     @Override
     public String toString() {
         return "MQLSubscription [subId=" + this.query.getSubscriptionId() +
-                ", criterion=" + this.query.getRawQuery() + "]";
+            ", criterion=" + this.query.getRawQuery() + "]";
     }
 }

@@ -212,13 +212,14 @@ public class ResourceClusterActorTest {
                 "",
                 false,
                 ImmutableMap.of(),
-                new CpuWeightedFitnessCalculator());
+                new CpuWeightedFitnessCalculator(),
+                null);
 
         resourceClusterActor = actorSystem.actorOf(props);
         resourceCluster =
             new ResourceClusterAkkaImpl(
                 resourceClusterActor,
-                Duration.ofSeconds(5),
+                Duration.ofSeconds(15),
                 CLUSTER_ID,
                 new LongDynamicProperty(propertiesLoader, "rate.limite.perSec", 10000L));
     }
@@ -350,7 +351,7 @@ public class ResourceClusterActorTest {
         // Test get cluster usage
         TestKit probe = new TestKit(actorSystem);
         resourceClusterActor.tell(new GetClusterUsageRequest(
-            CLUSTER_ID, ResourceClusterScalerActor.groupKeyFromTaskExecutorDefinitionIdFunc),
+                CLUSTER_ID, ResourceClusterScalerActor.groupKeyFromTaskExecutorDefinitionIdFunc),
             probe.getRef());
         GetClusterUsageResponse usageRes = probe.expectMsgClass(GetClusterUsageResponse.class);
         assertEquals(2, usageRes.getUsages().size());
@@ -657,7 +658,7 @@ public class ResourceClusterActorTest {
 
     @Test
     public void testIfDisabledTaskExecutorRequestsAreInitializedCorrectlyWhenTheControlPlaneStarts() throws Exception {
-        when(mantisJobStore.loadAllDisableTaskExecutorsRequests(Matchers.eq(CLUSTER_ID)))
+        when(mantisJobStore.loadAllDisableTaskExecutorsRequests(ArgumentMatchers.eq(CLUSTER_ID)))
             .thenReturn(ImmutableList.of(
                 new DisableTaskExecutorsRequest(
                     ATTRIBUTES,

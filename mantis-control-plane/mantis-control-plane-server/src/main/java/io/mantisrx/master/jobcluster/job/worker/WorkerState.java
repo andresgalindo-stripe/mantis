@@ -84,13 +84,13 @@ public enum WorkerState {
     static {
         STATE_TRANSITION_MAP = new HashMap<>();
         STATE_TRANSITION_MAP.put(WorkerState.Accepted, new WorkerState[]
-                {WorkerState.Launched, WorkerState.Failed, WorkerState.Completed});
+            {WorkerState.Launched, WorkerState.Failed, WorkerState.Completed});
         STATE_TRANSITION_MAP.put(WorkerState.Launched, new WorkerState[] {
-                WorkerState.StartInitiated, WorkerState.Started, WorkerState.Failed, WorkerState.Completed});
+            WorkerState.StartInitiated, WorkerState.Started, WorkerState.Failed, WorkerState.Completed});
         STATE_TRANSITION_MAP.put(WorkerState.StartInitiated, new WorkerState[] {WorkerState.StartInitiated,
-                WorkerState.Started, WorkerState.Failed, WorkerState.Completed});
+            WorkerState.Started, WorkerState.Failed, WorkerState.Completed});
         STATE_TRANSITION_MAP.put(WorkerState.Started, new WorkerState[] {WorkerState.Started,
-                WorkerState.Failed, WorkerState.Completed});
+            WorkerState.Failed, WorkerState.Completed});
         STATE_TRANSITION_MAP.put(WorkerState.Failed, new WorkerState[] {WorkerState.Failed});
         STATE_TRANSITION_MAP.put(WorkerState.Completed, new WorkerState[] {});
         META_STATES = new HashMap<>();
@@ -109,11 +109,11 @@ public enum WorkerState {
      */
     public static boolean isWorkerOnSlave(WorkerState state) {
         switch (state) {
-        case StartInitiated:
-        case Started:
-            return true;
-        default:
-            return false;
+            case StartInitiated:
+            case Started:
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -124,12 +124,28 @@ public enum WorkerState {
      */
     public static boolean isRunningState(WorkerState state) {
         switch (state) {
-        case Launched:
-        case StartInitiated:
-        case Started:
-            return true;
-        default:
-            return false;
+            case Launched:
+            case StartInitiated:
+            case Started:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Returns true if the worker is any valid starting state.
+     * @param state
+     * @return
+     */
+    public static boolean isPendingState(WorkerState state) {
+        switch (state) {
+            case Accepted:
+            case Launched:
+            case StartInitiated:
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -154,11 +170,11 @@ public enum WorkerState {
 
     public static boolean isTerminalState(WorkerState state) {
         switch (state) {
-        case Completed:
-        case Failed:
-            return true;
-        default:
-            return false;
+            case Completed:
+            case Failed:
+                return true;
+            default:
+                return false;
         }
 
     }
@@ -170,10 +186,10 @@ public enum WorkerState {
      */
     public static boolean isErrorState(WorkerState state) {
         switch (state) {
-        case Failed:
-            return true;
-        default:
-            return false;
+            case Failed:
+                return true;
+            default:
+                return false;
         }
     }
 

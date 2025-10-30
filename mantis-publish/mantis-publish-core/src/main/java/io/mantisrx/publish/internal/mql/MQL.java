@@ -21,6 +21,7 @@ import io.mantisrx.mql.shaded.clojure.java.api.Clojure;
 import io.mantisrx.mql.shaded.clojure.lang.IFn;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import org.slf4j.Logger;
@@ -49,25 +50,25 @@ public class MQL {
 
     @SuppressWarnings("unchecked")
     public static Function<Map<String, Object>, Map<String, Object>> makeSupersetProjector(
-            HashSet<Query> queries) {
-        ArrayList<String> qs = new ArrayList<>(queries.size());
+        HashSet<Query> queries) {
+        List<String> qs = new ArrayList<>(queries.size());
         for (Query query : queries) {
             qs.add(query.getRawQuery());
         }
 
-        IFn ssProjector = (IFn) cljSuperset.invoke(new ArrayList(qs));
+        IFn ssProjector = (IFn) cljSuperset.invoke(qs);
         return (datum) -> (Map<String, Object>) (ssProjector.invoke(datum));
     }
 
     public static String preprocess(String criterion) {
         return criterion.toLowerCase().equals("true") ? "select * where true" :
-                criterion.toLowerCase().equals("false") ? "select * where false" :
-                        criterion;
+            criterion.toLowerCase().equals("false") ? "select * where false" :
+                criterion;
     }
 
     public static boolean isContradictionQuery(String query) {
         return query.equals("false") ||
-                query.equals("select * where false") ||
-                query.equals("select * from stream where false");
+            query.equals("select * where false") ||
+            query.equals("select * from stream where false");
     }
 }

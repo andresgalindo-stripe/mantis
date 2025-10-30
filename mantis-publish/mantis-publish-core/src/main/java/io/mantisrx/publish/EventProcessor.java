@@ -70,16 +70,15 @@ class EventProcessor {
     public Event process(String stream, Event event) {
         LOG.debug("Entering EventProcessor#onNext: {}", event);
 
-        boolean isEnabled = config.isMREClientEnabled();
-        if (!isEnabled) {
+        if (!config.isMREClientEnabled()) {
             LOG.debug("Mantis Realtime Events Publisher is disabled."
-                    + "Set the property defined in your MrePublishConfiguration object to true to enable.");
+                + "Set the property defined in your MrePublishConfiguration object to true to enable.");
             return null;
         }
 
         // make a deep copy before proceeding to avoid altering the user provided map.
         if (config.isDeepCopyEventMapEnabled()) {
-            event = new Event(event.getMap(), true);
+            event = new Event(event.getMap());
         }
 
         maskSensitiveFields(event);
@@ -99,7 +98,7 @@ class EventProcessor {
                     }
                 } catch (Exception e) {
                     streamManager.getStreamMetrics(stream)
-                            .ifPresent(m -> m.getMantisQueryFailedCounter().increment());
+                        .ifPresent(m -> m.getMantisQueryFailedCounter().increment());
 
                     // Send errors only for a sample of events.
                     int rndNo = randomGenerator.nextInt(1_000_000);
@@ -114,14 +113,10 @@ class EventProcessor {
         if (!matchingSubscriptions.isEmpty()) {
             projectedEvent = projectSupersetEvent(stream, matchingSubscriptions, event);
         } else {
-            if (LOG.isTraceEnabled()) {
-                LOG.trace("no matching subscriptions");
-            }
+            LOG.trace("no matching subscriptions");
         }
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Exit EventProcessor#onNext: {}", event);
-        }
+        LOG.debug("Exit EventProcessor#onNext: {}", event);
 
         return projectedEvent;
     }
@@ -131,14 +126,10 @@ class EventProcessor {
      */
     void maskSensitiveFields(Event event) {
         String blacklistKeys = config.blackListedKeysCSV();
-        List<String> blacklist =
-                Arrays.stream(blacklistKeys.split(","))
-                        .map(String::trim)
-                        .collect(Collectors.toList());
-
-        blacklist.stream()
-                .filter(key -> event.get(key) != null)
-                .forEach(key -> event.set(key, "***"));
+        Arrays.stream(blacklistKeys.split(","))
+            .map(String::trim)
+            .filter(key -> event.get(key) != null)
+            .forEach(key -> event.set(key, "***"));
     }
 
     private void sendError(Subscription subscription, String errorMessage) {
@@ -161,11 +152,9 @@ class EventProcessor {
     }
 
     private Event projectSupersetEvent(final String streamName,
-                                             final List<Subscription> matchingSubscriptions,
-                                             final Event event) {
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Enter EventProcessor#projectSupersetEvent {}  event: {}", matchingSubscriptions, event);
-        }
+                                       final List<Subscription> matchingSubscriptions,
+                                       final Event event) {
+        LOG.debug("Enter EventProcessor#projectSupersetEvent {}  event: {}", matchingSubscriptions, event);
 
         Event projectedEvent = null;
         try {
@@ -176,30 +165,28 @@ class EventProcessor {
             // Log only the first error so as to avoid flooding the log files.
             if (errorLogEnabled.get()) {
                 String queries = matchingSubscriptions.stream()
-                        .map(Subscription::getRawQuery)
-                        .collect(Collectors.joining(", "));
+                    .map(Subscription::getRawQuery)
+                    .collect(Collectors.joining(", "));
                 LOG.error("Failed to project Event {} for queries: {}", event, queries);
                 errorLogEnabled.set(false);
             }
             streamManager.getStreamMetrics(streamName).ifPresent(m ->
-                    m.getMantisQueryProjectionFailedCounter().increment());
+                m.getMantisQueryProjectionFailedCounter().increment());
         }
 
         Event augmentedEvent = null;
         if (projectedEvent != null && !projectedEvent.isEmpty()) {
             augmentedEvent = enrich(projectedEvent, streamName, matchingSubscriptions);
         } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Projected event is empty. skipping");
-            }
+            LOG.debug("Projected event is empty. skipping");
         }
 
         return augmentedEvent;
     }
 
-    private Event enrich(Event projectedEvent,
-                         String streamName,
-                         List<Subscription> matchingSubscriptions) {
+    private static Event enrich(Event projectedEvent,
+                                String streamName,
+                                List<Subscription> matchingSubscriptions) {
         projectedEvent.set("type", "EVENT");
         projectedEvent.set("mantisStream", streamName);
 
@@ -209,9 +196,7 @@ class EventProcessor {
         }
         projectedEvent.set("matched-clients", subIdList);
 
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Generated event string: {}", projectedEvent);
-        }
+        LOG.debug("Generated event string: {}", projectedEvent);
 
         return projectedEvent;
     }
